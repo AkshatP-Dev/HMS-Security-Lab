@@ -1,0 +1,27 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────
+# HMS-Lab — HARDENED / SECURE configuration
+# Starts the hardened application on port 5001.
+# ─────────────────────────────────────────────────────────────
+
+services:
+  hms-secure:
+    build:
+      context: ./app/secure
+      dockerfile: Dockerfile
+    container_name: hms_secure
+    ports:
+      - "127.0.0.1:5001:5001"   # Localhost only
+    volumes:
+      - secure_data:/data
+    environment:
+      # FIX-01: Secret key passed as environment variable, not hardcoded
+      # Replace with: openssl rand -hex 32
+      - HMS_SECRET_KEY=CHANGE_ME_USE_openssl_rand_hex_32
+      - FLASK_DEBUG=false
+      - HTTPS=false              # Set true when running behind TLS terminator
+    restart: unless-stopped
+
+volumes:
+  secure_data:

@@ -1,0 +1,24 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────
+# HMS-Lab — INSECURE configuration
+# Starts the intentionally vulnerable application on port 5000.
+# Use ONLY on localhost for training purposes.
+# ─────────────────────────────────────────────────────────────
+
+services:
+  hms-insecure:
+    build:
+      context: ./app/insecure
+      dockerfile: Dockerfile
+    container_name: hms_insecure
+    ports:
+      - "127.0.0.1:5000:5000"   # Bound to localhost only — not exposed externally
+    volumes:
+      - insecure_data:/data
+    environment:
+      - FLASK_ENV=development    # Enables debug mode (intentional — see VULN-11)
+    restart: unless-stopped
+
+volumes:
+  insecure_data:
