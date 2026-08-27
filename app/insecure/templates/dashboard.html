@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Dashboard</h2>
+<p>Welcome, <strong>{{ username }}</strong> (role: {{ role }})</p>
+<ul>
+  <li><a href="/patients">View Patients</a></li>
+  <li><a href="/admin">Admin Panel</a> — <em>role check missing — any user can access</em></li>
+  <li><a href="/api/search?q=">API Search</a></li>
+</ul>
+<h3>Test Credentials</h3>
+<table>
+  <tr><th>Username</th><th>Password</th><th>Role</th></tr>
+  <tr><td>admin</td><td>admin</td><td>admin</td></tr>
+  <tr><td>drsmith</td><td>password</td><td>doctor</td></tr>
+  <tr><td>alice</td><td>alice123</td><td>patient</td></tr>
+  <tr><td>bob</td><td>bobpass</td><td>patient</td></tr>
+</table>
+{% endblock %}

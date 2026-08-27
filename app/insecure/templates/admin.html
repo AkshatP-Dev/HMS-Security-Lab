@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Admin Panel</h2>
+<!-- VULN-09: reachable by ANY authenticated user, not just admins -->
+<!-- VULN-03: password hashes displayed in clear — an attacker can crack MD5 offline -->
+<p style="color:red"><strong>⚠ Broken access control:</strong>
+  this page is accessible to any logged-in user regardless of role.</p>
+<table>
+  <tr><th>ID</th><th>Username</th><th>Role</th><th>Password Hash (MD5)</th></tr>
+  {% for u in users %}
+  <tr>
+    <td>{{ u.id }}</td>
+    <td>{{ u.username }}</td>
+    <td>{{ u.role }}</td>
+    <td style="font-family:monospace">{{ u.password }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Patient Record</h2>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>ID</td><td>{{ patient.id }}</td></tr>
+  <tr><td>Full Name</td><td>{{ patient.full_name }}</td></tr>
+  <tr><td>Date of Birth</td><td>{{ patient.dob }}</td></tr>
+  <tr><td>Diagnosis</td><td>{{ patient.diagnosis }}</td></tr>
+  <tr><td>Notes</td><td>{{ patient.notes }}</td></tr>
+</table>
+
+<h3>Update Notes</h3>
+<!-- FIX-08: CSRF token embedded — cross-site form submissions rejected -->
+<form method="POST" action="/patient/{{ patient.id }}/update">
+  {{ form.hidden_tag() }}
+  <textarea name="notes" rows="4" cols="50">{{ patient.notes }}</textarea><br>
+  <button class="btn" type="submit">Save</button>
+</form>
+<p><a href="/patients">← Back</a></p>
+{% endblock %}

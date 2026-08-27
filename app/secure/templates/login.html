@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HMS — Login (SECURE)</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f0fff0;
+           display:flex; flex-direction:column; align-items:center; padding-top:80px; }
+    .banner { background:#006600; color:white; width:100%; text-align:center;
+              padding:8px; position:fixed; top:0; }
+    form { background:white; padding:30px; border:1px solid #ccc; min-width:300px; }
+    h2 { margin-top:0; }
+    label { display:block; margin:10px 0 4px; }
+    input { width:100%; padding:6px; box-sizing:border-box; }
+    .btn { margin-top:14px; width:100%; padding:8px; background:#1a5276;
+           color:white; border:none; cursor:pointer; }
+    .error { color:red; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="banner">✅  HARDENED TRAINING VERSION — localhost only</div>
+  <form method="POST" action="/login">
+    <!-- FIX-08: CSRF token required — Flask-WTF validates this server-side -->
+    {{ form.hidden_tag() }}
+    <h2>HMS Login</h2>
+    {% with messages = get_flashed_messages(with_categories=True) %}
+      {% for cat, msg in messages %}
+        <div class="error">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    <label>Username</label>
+    {{ form.username(class="") }}
+    {% if form.username.errors %}
+      <div class="error">{{ form.username.errors[0] }}</div>
+    {% endif %}
+    <label>Password</label>
+    {{ form.password(class="") }}
+    {% if form.password.errors %}
+      <div class="error">{{ form.password.errors[0] }}</div>
+    {% endif %}
+    <button class="btn" type="submit">Login</button>
+  </form>
+</body>
+</html>

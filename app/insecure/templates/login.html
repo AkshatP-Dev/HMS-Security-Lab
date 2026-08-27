@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HMS — Login (INSECURE)</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #fff0f0;
+           display:flex; flex-direction:column; align-items:center; padding-top:80px; }
+    .banner { background:#cc0000; color:white; width:100%; text-align:center;
+              padding:8px; position:fixed; top:0; }
+    form { background:white; padding:30px; border:1px solid #ccc; min-width:300px; }
+    h2 { margin-top:0; }
+    label { display:block; margin:10px 0 4px; }
+    input { width:100%; padding:6px; box-sizing:border-box; }
+    .btn { margin-top:14px; width:100%; padding:8px; background:#333;
+           color:white; border:none; cursor:pointer; }
+    .error { color:red; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="banner">⚠️  INSECURE TRAINING VERSION — LOCAL USE ONLY</div>
+  <form method="POST" action="/login">
+    <!-- VULN-08: No CSRF token on this form -->
+    <h2>HMS Login</h2>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <label>Username</label>
+    <input type="text" name="username" autocomplete="off">
+    <label>Password</label>
+    <input type="password" name="password">
+    <button class="btn" type="submit">Login</button>
+  </form>
+</body>
+</html>

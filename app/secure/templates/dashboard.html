@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Dashboard</h2>
+<p>Welcome, <strong>{{ username }}</strong> (role: {{ role }})</p>
+<ul>
+  <li><a href="/patients">View Patients</a></li>
+  {% if role == 'admin' %}
+  <li><a href="/admin">Admin Panel</a></li>
+  {% endif %}
+</ul>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Admin Panel</h2>
+<!-- FIX-09: Only 'admin' role reaches this page (enforced in app.py) -->
+<!-- FIX-03: Password hashes are never rendered in the UI -->
+<table>
+  <tr><th>ID</th><th>Username</th><th>Role</th></tr>
+  {% for u in users %}
+  <tr>
+    <td>{{ u.id }}</td>
+    <td>{{ u.username }}</td>
+    <td>{{ u.role }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

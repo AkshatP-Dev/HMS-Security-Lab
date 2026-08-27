@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Patient List</h2>
+<form method="GET" action="/patients">
+  <input type="text" name="name" value="{{ name_filter }}" placeholder="Search by name">
+  <button class="btn" type="submit">Search</button>
+</form>
+<table>
+  <tr><th>ID</th><th>Full Name</th><th>DOB</th><th>Diagnosis</th><th>Action</th></tr>
+  {% for p in patients %}
+  <tr>
+    <td>{{ p.id }}</td>
+    <td>{{ p.full_name }}</td>
+    <td>{{ p.dob }}</td>
+    <td>{{ p.diagnosis }}</td>
+    <td><a href="/patient/{{ p.id }}">View</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HMS Training Lab — SECURE</title>
+  <!-- Security headers applied by Flask-Talisman in app.py -->
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f0fff0; }
+    .banner { background: #006600; color: white; padding: 8px 20px; font-size: 13px; }
+    nav { background: #1a5276; padding: 10px 20px; }
+    nav a { color: white; margin-right: 15px; text-decoration: none; }
+    .content { padding: 20px; }
+    .flash-error { background:#fdd; border:1px solid #c00; padding:8px; margin-bottom:10px; }
+    .flash-success { background:#dfd; border:1px solid #060; padding:8px; margin-bottom:10px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #eee; }
+    .btn { padding: 6px 14px; background: #1a5276; color: white;
+           border: none; cursor: pointer; text-decoration: none; }
+    input[type=text], input[type=password], textarea {
+      padding: 6px; width: 250px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <div class="banner">✅  HARDENED TRAINING VERSION — localhost only</div>
+  <nav>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/patients">Patients</a>
+    {% if session.role == 'admin' %}
+    <a href="/admin">Admin</a>
+    {% endif %}
+    <a href="/logout">Logout ({{ session.username }})</a>
+  </nav>
+  <div class="content">
+    {% with messages = get_flashed_messages(with_categories=True) %}
+      {% for cat, msg in messages %}
+        <div class="flash-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>
