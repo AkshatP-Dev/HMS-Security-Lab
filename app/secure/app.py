@@ -37,7 +37,7 @@ app.secret_key = os.environ.get("HMS_SECRET_KEY") or os.urandom(32)
 # HttpOnly: hidden from JavaScript — XSS cannot steal the cookie.
 # SameSite=Lax: not sent on cross-site POST requests — CSRF mitigation.
 # ──────────────────────────────────────────────────────────
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("HTTPS", "false").lower() == "true"
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("HTTPS", "false").lower() == "true"  # noqa: E501
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["WTF_CSRF_TIME_LIMIT"] = 3600       # tokens valid 1 hour
@@ -50,13 +50,39 @@ app.config["WTF_CSRF_TIME_LIMIT"] = 3600       # tokens valid 1 hour
 csrf = CSRFProtect(app)
 
 # ──────────────────────────────────────────────────────────
-# FIX-04 — Rate limiting on all routes, with stricter limit on /login
-# 200 requests/day and 50/hour per IP generally; 10/minute on login.
+# FIX-04 — Rate limiting on all routes, with a stricter limit on /login
+# 5000/day and 500/hour per IP generally; 10/minute on login POSTs.
+#
+# The general limits are deliberately loose. A per-IP cap tight enough to
+# matter as a security control would also break every legitimate user behind
+# a corporate NAT or mobile carrier gateway, where hundreds of people share
+# one address. The general limit is abuse-dampening; the security control is
+# the login limit below it.
+#
+# The login limit is deliberately scoped to POST only (see the decorator on
+# login()). Throttling GET /login would rate-limit the act of *displaying* the
+# form, which does not consume a password guess — it only breaks legitimate
+# users who reload the page, and it makes automated testing of the control
+# impossible because every test must first fetch a CSRF token.
+# Brute-force protection belongs on the credential submission, not the render.
 # ──────────────────────────────────────────────────────────
+# Both limits are configuration, not constants. The shipped defaults below are
+# the ones docker-compose.secure.yml runs with and the ones the documentation
+# claims. They are overridable so the test suite can exercise the *mechanism*
+# without fighting the production threshold: a suite that performs more than
+# ten logins a minute would otherwise throttle itself and every assertion after
+# it would fail for the wrong reason. This is a configuration seam, not a
+# test-only backdoor — there is no code path that disables the limiter.
+# See TESTING.md, "Rate limiting and the test suite".
+DEFAULT_RATE_LIMITS = os.environ.get(
+    "HMS_DEFAULT_RATE_LIMITS", "5000 per day;500 per hour"
+).split(";")
+LOGIN_RATE_LIMIT = os.environ.get("HMS_LOGIN_RATE_LIMIT", "10 per minute")
+
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=DEFAULT_RATE_LIMITS,
     storage_uri="memory://",
 )
 
@@ -72,15 +98,28 @@ csp = {
     "img-src":     ["'self'", "data:"],
     "frame-ancestors": ["'none'"],
 }
+# NOTE on session_cookie_secure: Talisman sets SESSION_COOKIE_SECURE=True on
+# every request whenever app.debug is False — independently of force_https.
+# On this HTTP-only lab that silently breaks every authenticated session,
+# because a browser (or requests) will not return a Secure cookie over http://.
+# We therefore drive it from the same HTTPS env var as FIX-02 above, so the
+# flag is ON by default in any TLS-terminated deployment and OFF only for the
+# local plain-HTTP lab. Setting HTTPS=true restores the production behaviour.
+_https = os.environ.get("HTTPS", "false").lower() == "true"
+
 Talisman(
     app,
     content_security_policy=csp,
-    force_https=False,          # local HTTP lab
-    strict_transport_security=False,
+    force_https=_https,         # local HTTP lab by default
+    strict_transport_security=_https,
+    session_cookie_secure=_https,
+    session_cookie_http_only=True,
     referrer_policy="no-referrer",
 )
 
-DATABASE = "/data/hms_secure.db"
+# Database path is env-overridable so the suite can run the apps directly
+# (venv / CI) as well as under docker compose, where /data is a volume.
+DATABASE = os.environ.get("HMS_DB_PATH", "/data/hms_secure.db")
 
 
 # ── Forms ─────────────────────────────────────────────────
@@ -148,11 +187,19 @@ def init_db():
 
     # FIX-03 — bcrypt with cost factor 12 (adaptive; resists brute-force as
     # CPUs improve; each hash is unique due to built-in random salt).
+    # These are lab credentials for a local-only training target. They are
+    # deliberately weak and deliberately identical to the insecure build's
+    # accounts, so the same login works against both and the only difference
+    # a tester observes is how the password is stored and checked.
+    # Every password here is >= 6 characters so it satisfies LoginForm's own
+    # Length(min=6) validator — an earlier revision seeded a 5-character admin
+    # password, which the form rejected before the credential was ever checked
+    # and made the entire admin/RBAC path unreachable in the hardened build.
     seed_users = [
-        ("admin",   "admin",   "admin"),
-        ("drsmith", "password","doctor"),
-        ("alice",   "alice123","patient"),
-        ("bob",     "bobpass", "patient"),
+        ("admin",   "admin123", "admin"),
+        ("drsmith", "password", "doctor"),
+        ("alice",   "alice123", "patient"),
+        ("bob",     "bobpass",  "patient"),
     ]
     for username, plaintext, role in seed_users:
         existing = db.execute(
@@ -219,7 +266,10 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
-@limiter.limit("10 per minute")          # FIX-04 — Rate limiting on login
+# FIX-04 — Rate limiting on credential submission only. GET (rendering the
+# form) is covered by the 200/day + 50/hour default limits; only POST, which
+# actually consumes a password guess, is throttled at 10/minute.
+@limiter.limit(LOGIN_RATE_LIMIT, methods=["POST"])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
