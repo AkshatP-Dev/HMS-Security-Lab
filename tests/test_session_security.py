@@ -46,9 +46,11 @@ def get_set_cookie_header(base: str) -> str:
     if csrf_input:
         data["csrf_token"] = csrf_input["value"]
     r = s.post(f"{base}/login", data=data, allow_redirects=False)
-    # Follow the redirect manually to catch the cookie
-    if r.status_code in (301, 302):
-        r2 = s.get(f"{base}{r.headers.get('Location', '/')}", allow_redirects=False)
+    assert r.status_code in (301, 302), (
+        f"Login POST to {base} returned {r.status_code}, not a redirect — the "
+        f"login did not succeed, so there is no session cookie to inspect and "
+        f"the flag assertions below would fail for the wrong reason."
+    )
     return r.headers.get("Set-Cookie", "")
 
 
