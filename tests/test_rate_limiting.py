@@ -9,24 +9,29 @@ Tests:
   RATE-02  Insecure app does NOT enforce a rate limit (xfail — vuln confirmed)
 
 Note on test design:
-  The secure app is configured for 10 requests/minute on /login.
-  We send 12 requests in quick succession and expect the 12th to return 429.
-  All requests go to localhost only.
+  The threshold is read from the same configuration the app runs with
+  (HMS_LOGIN_RATE_LIMIT, default "10 per minute") rather than hardcoded, so
+  this test verifies the limiter against the app's actual setting. We send
+  threshold + 3 requests and expect at least one 429.
 
-  Because rate-limit state is in-memory and per-container, running this test
-  may temporarily block the test user from logging in for up to 60 seconds.
-  A fresh Docker container restores the counter.
+  Only POST is limited. GET /login renders the form and does not consume a
+  password guess, so throttling it would punish page reloads without slowing
+  an attacker down at all.
+
+  Rate-limit state is in-memory and per-process, so this test consumes the
+  login budget for the rest of the minute. See TESTING.md, "Rate limiting and
+  the test suite", for why the harness raises the limit rather than the suite
+  working around it. All requests go to localhost only.
 """
 
-import time
 import pytest
 import requests
 from bs4 import BeautifulSoup
-from conftest import INSECURE_BASE, SECURE_BASE
+from conftest import INSECURE_BASE, SECURE_BASE, LOGIN_RATE_LIMIT_COUNT
 
 
-LIMIT_THRESHOLD = 10      # configured in secure/app.py: "10 per minute"
-OVERSHOOT       = 13      # requests to send (must exceed limit)
+LIMIT_THRESHOLD = LOGIN_RATE_LIMIT_COUNT   # whatever the app is running with
+OVERSHOOT       = LIMIT_THRESHOLD + 3      # requests to send (must exceed it)
 
 
 def attempt_login(base: str, n: int) -> list[int]:
