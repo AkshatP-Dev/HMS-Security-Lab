@@ -34,7 +34,9 @@ app.config["SESSION_COOKIE_SECURE"] = False
 app.config["SESSION_COOKIE_HTTPONLY"] = False
 app.config["SESSION_COOKIE_SAMESITE"] = None
 
-DATABASE = "/data/hms_insecure.db"
+# Database path is env-overridable so the suite can run the apps directly
+# (venv / CI) as well as under docker compose, where /data is a volume.
+DATABASE = os.environ.get("HMS_DB_PATH", "/data/hms_insecure.db")
 
 
 def get_db():
@@ -80,10 +82,19 @@ def init_db():
         INSERT OR IGNORE INTO users (username, password, role)
             VALUES
             -- VULN-03: passwords stored as unsalted MD5 hashes (trivially crackable)
-            ('admin',   '21232f297a57a5a743894a0e4a801fc3', 'admin'),
+            -- The plaintexts below are identical to the hardened build's seeded
+            -- accounts, so the same credentials work against both targets and the
+            -- only observable difference is how the password is stored and checked.
+            --   admin   / admin123  -> 0192023a7bbd73250516f069df18b500
+            --   drsmith / password  -> 5f4dcc3b5aa765d61d8327deb882cf99
+            --   alice   / alice123  -> 7abdccbea8473767e91378e37850d296
+            --   bob     / bobpass   -> 6a3c7c6166b4ffcf922329d0e821003b
+            -- Every one of these resolves in seconds against a public rainbow
+            -- table. That is precisely the point of VULN-03.
+            ('admin',   '0192023a7bbd73250516f069df18b500', 'admin'),
             ('drsmith', '5f4dcc3b5aa765d61d8327deb882cf99', 'doctor'),
-            ('alice',   '6384e2b2184bcbf58eccf10ca7a6563c', 'patient'),
-            ('bob',     '9f9d51bc70ef21ca5c14f307980a29d8', 'patient');
+            ('alice',   '7abdccbea8473767e91378e37850d296', 'patient'),
+            ('bob',     '6a3c7c6166b4ffcf922329d0e821003b', 'patient');
         INSERT OR IGNORE INTO patients (user_id, full_name, dob, diagnosis, notes)
             VALUES
             (3, 'Alice Johnson', '1990-04-12', 'Hypertension', 'On lisinopril 10mg'),
@@ -116,8 +127,22 @@ def login():
 
         # ──────────────────────────────────────────────────
         # VULN-05 — SQL injection via string concatenation
-        # Input: username = ' OR '1'='1
-        # Resulting query: SELECT * FROM users WHERE username='' OR '1'='1'...
+        #
+        # Working bypass:  username = admin'--
+        #   SELECT * FROM users WHERE username='admin'--' AND password='...'
+        #   Everything after -- is a comment, so the password test is removed
+        #   entirely and the query returns the admin row.
+        #
+        # Also works:      username = ' OR 1=1--
+        #
+        # Does NOT work:   username = ' OR '1'='1
+        #   SELECT * FROM users WHERE username='' OR '1'='1' AND password='...'
+        #   AND binds tighter than OR, so SQL reads this as
+        #       username='' OR ('1'='1' AND password='<md5>')
+        #   and the password condition still has to hold. The injection is real
+        #   — the query structure genuinely changed — but the payload does not
+        #   authenticate. A payload that alters the query is not automatically a
+        #   payload that exploits it; the tests assert both cases explicitly.
         # ──────────────────────────────────────────────────
         # VULN-03 — MD5 is cryptographically broken; rainbow tables exist
         md5pw = hashlib.md5(password.encode()).hexdigest()
@@ -170,7 +195,9 @@ def patients():
 
     # ──────────────────────────────────────────────────────
     # VULN-05 — SQL injection in search parameter
-    # Payload: name=x' UNION SELECT id,username,password,role,null FROM users--
+    # Payload: name=%' UNION SELECT id,username,password,role,NULL,NULL FROM users--
+    # (six projected columns, matching the six in `patients` — a mismatch makes
+    #  SQLite reject the statement, which reads as a defence that isn't there.)
     # ──────────────────────────────────────────────────────
     if name_filter:
         query = "SELECT * FROM patients WHERE full_name LIKE '%" + name_filter + "%'"
