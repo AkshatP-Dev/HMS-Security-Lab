@@ -8,29 +8,19 @@ Tests:
   PWD-01  Insecure app stores MD5 hashes (expected weak — xfail)
   PWD-02  Secure app stores bcrypt hashes (strong — must pass)
   PWD-03  Secure app hashes are unique even for the same password
-  PWD-04  MD5 hash of 'admin' is not present anywhere in secure responses
+  PWD-04  No password hash is present anywhere in secure admin responses
 
-We verify by reading the SQLite database file directly inside the container
-via the Docker exec approach — alternatively the tests inspect admin-page
-output as a proxy.
+We verify by reading the SQLite database itself rather than an HTTP response —
+what this control is about is what gets written to disk. conftest.query_db()
+handles both the docker compose workflow and a direct local run; if neither
+route is available these tests skip rather than fail.
 """
 
-import subprocess
-import pytest
 import hashlib
 
-from conftest import SECURE_BASE, secure_admin_session, make_session, ADMIN_CREDS
+import pytest
 
-
-# ─── Helper: query the DB via docker exec ─────────────────
-
-def query_db(container: str, db_path: str, sql: str) -> str:
-    """Run a SQLite query inside a Docker container. Returns stdout."""
-    result = subprocess.run(
-        ["docker", "exec", container, "sqlite3", db_path, sql],
-        capture_output=True, text=True, timeout=10,
-    )
-    return result.stdout.strip()
+from conftest import SECURE_BASE, ADMIN_CREDS, query_db
 
 
 # ─── PWD-01  Insecure app uses MD5 ────────────────────────
@@ -56,14 +46,20 @@ class TestInsecurePasswordStorage:
         )
 
     def test_insecure_admin_password_is_md5(self):
-        """Confirms the insecure app stores the known MD5 of 'admin'."""
+        """Confirms the insecure app stores the plain MD5 of the admin password.
+
+        This test PASSES — it asserts the weakness is present and intact. An
+        unsalted MD5 of a known plaintext is directly reversible by lookup,
+        which is the property VULN-03 exists to demonstrate.
+        """
         output = query_db(
             "hms_insecure",
             "/data/hms_insecure.db",
             "SELECT password FROM users WHERE username='admin';",
         )
-        expected_md5 = hashlib.md5(b"admin").hexdigest()
-        # This test PASSES — confirming the weak storage is in place
+        expected_md5 = hashlib.md5(
+            ADMIN_CREDS["password"].encode()
+        ).hexdigest()
         assert output == expected_md5, (
             f"Expected MD5 {expected_md5}, got {output!r}"
         )
@@ -83,6 +79,25 @@ class TestSecurePasswordStorage:
         assert output.startswith("$2b$") or output.startswith("$2a$"), (
             f"Expected bcrypt hash, found: {output[:30]!r}"
         )
+
+    def test_secure_bcrypt_cost_factor_is_12(self):
+        """FIX-03: cost factor must actually be 12, not merely 'bcrypt'.
+
+        The resume-level claim is the cost factor, so assert the cost factor.
+        A bcrypt hash is $2b$<cost>$<salt+digest>; a build that silently fell
+        back to the library default would still start with $2b$ and pass the
+        test above.
+        """
+        output = query_db(
+            "hms_secure",
+            "/data/hms_secure.db",
+            "SELECT password FROM users;",
+        )
+        hashes = [h.strip() for h in output.splitlines() if h.strip()]
+        assert hashes, "No password hashes found in the secure database"
+        for h in hashes:
+            cost = h.split("$")[2]
+            assert cost == "12", f"Expected bcrypt cost 12, found {cost} in {h[:20]!r}"
 
     def test_secure_no_md5_hashes_in_db(self):
         """No 32-char hex string (MD5 pattern) should be a password."""
@@ -115,7 +130,12 @@ class TestSecurePasswordStorage:
         """FIX-03: Even the admin UI must not expose hash strings."""
         r = secure_admin_session.get(f"{SECURE_BASE}/admin",
                                      allow_redirects=True)
+        assert r.status_code == 200, (
+            f"Admin page unreachable ({r.status_code}) — the admin account "
+            f"cannot log in, so this assertion would pass vacuously."
+        )
         assert "$2b$" not in r.text
         assert "$2a$" not in r.text
-        # Also verify no MD5 pattern: admin's MD5 is 21232f297a57a5a743894a0e4a801fc3
-        assert "21232f" not in r.text
+        # And no MD5 of the admin password either.
+        admin_md5 = hashlib.md5(ADMIN_CREDS["password"].encode()).hexdigest()
+        assert admin_md5 not in r.text
