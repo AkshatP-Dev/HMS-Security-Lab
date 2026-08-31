@@ -4,6 +4,11 @@
 > All testing runs against `localhost` Docker containers only.
 > No external systems are targeted.
 
+> **Status:** suite run and verified — `40 passed, 13 xfailed, 0 failed`
+> (29 Aug 2026). Every weakness was also exploited by hand against the
+> vulnerable build and re-tested against the hardened one. Full output,
+> evidence and reproduction steps: [RESULTS.md](RESULTS.md).
+
 A Hospital Management System built in **two states** — intentionally vulnerable and hardened — to demonstrate the complete secure-development lifecycle:
 
 ```
@@ -139,31 +144,45 @@ Seeded in both app versions:
 
 | Username | Password | Role    |
 |----------|----------|---------|
-| admin    | admin    | admin   |
+| admin    | admin123 | admin   |
 | drsmith  | password | doctor  |
 | alice    | alice123 | patient |
 | bob      | bobpass  | patient |
+
+The two builds share credentials deliberately, so the only difference a tester
+observes is how the password is *stored and verified*, never which password
+works. Every password is at least six characters, because the hardened build's
+login form enforces `Length(min=6)` — a shorter one is rejected by input
+validation before the credential is ever checked.
 
 ---
 
 ## Security Weaknesses Demonstrated
 
 Each weakness is labelled `VULN-xx` in `app/insecure/app.py` and the
-corresponding fix is labelled `FIX-xx` in `app/secure/app.py`.
+corresponding fix is labelled `FIX-xx` in `app/secure/app.py`. Eleven
+weaknesses across **five** OWASP Top 10 (2021) categories — the full mapping,
+with CWEs and an explicit list of what this lab does *not* cover, is in
+[OWASP_MAPPING.md](OWASP_MAPPING.md).
 
-| ID      | Category                        | Insecure pattern                      | Secure fix                          |
-|---------|---------------------------------|---------------------------------------|-------------------------------------|
-| VULN-01 | Secret management               | `secret_key = "supersecret123"`       | `os.environ["HMS_SECRET_KEY"]`      |
-| VULN-02 | Session cookie flags            | No HttpOnly, no SameSite              | HttpOnly=True, SameSite=Lax         |
-| VULN-03 | Credential storage              | Unsalted MD5                          | bcrypt (cost factor 12)             |
-| VULN-04 | Brute-force protection          | Unlimited login attempts              | Flask-Limiter (10 req/min)          |
-| VULN-05 | SQL injection                   | String-concatenated queries           | Parameterized queries (`?`)         |
-| VULN-06 | Information disclosure          | `debug=True`, verbose stack traces    | Generic error pages, debug=False    |
-| VULN-07 | Insecure Direct Object Ref.     | No ownership check on patient records | Server-side user_id ownership check |
-| VULN-08 | Cross-Site Request Forgery      | No token on state-changing forms      | Flask-WTF CSRFProtect               |
-| VULN-09 | Broken access control           | Admin panel accessible to any role    | `@roles_required("admin")`          |
-| VULN-10 | Missing security headers        | No security response headers          | Flask-Talisman (CSP, X-Frame, etc.) |
-| VULN-11 | Debug mode                      | `app.run(debug=True)`                 | FLASK_DEBUG env var, default False  |
+| ID      | OWASP 2021 | Weakness                        | Insecure pattern                      | Secure fix                          |
+|---------|------------|---------------------------------|---------------------------------------|-------------------------------------|
+| VULN-01 | A02        | Secret management               | `secret_key = "supersecret123"`       | `os.environ["HMS_SECRET_KEY"]`      |
+| VULN-02 | A05        | Session cookie flags            | No HttpOnly, no SameSite              | HttpOnly=True, SameSite=Lax         |
+| VULN-03 | A02        | Credential storage              | Unsalted MD5                          | bcrypt (cost factor 12)             |
+| VULN-04 | A07        | Brute-force protection          | Unlimited login attempts              | Flask-Limiter (10/min on login POST)|
+| VULN-05 | A03        | SQL injection                   | String-concatenated queries           | Parameterised queries (`?`)         |
+| VULN-06 | A07        | Username enumeration            | Distinguishable auth error messages   | Uniform message, generic error pages|
+| VULN-07 | A01        | Insecure Direct Object Ref.     | No ownership check on patient records | Server-side user_id ownership check |
+| VULN-08 | A01        | Cross-Site Request Forgery      | No token on state-changing forms      | Flask-WTF CSRFProtect               |
+| VULN-09 | A01        | Broken access control           | Admin panel accessible to any role    | `@roles_required("admin")`          |
+| VULN-10 | A05        | Missing security headers        | No security response headers          | Flask-Talisman (CSP, X-Frame, etc.) |
+| VULN-11 | A05        | Debug mode                      | `app.run(debug=True)`                 | FLASK_DEBUG env var, default False  |
+
+Note that VULN-07 (IDOR) and VULN-08 (CSRF) both fall under **A01 Broken
+Access Control** — CSRF stopped being a standalone Top 10 category in 2013.
+Eleven weaknesses is not eleven categories, and the two numbers are easy to
+conflate.
 
 ---
 
