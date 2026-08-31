@@ -1,7 +1,16 @@
 # HMS Security Lab — convenience targets
 # Usage: make <target>
 
-.PHONY: help up-insecure up-secure up-both down test clean logs-insecure logs-secure
+.PHONY: help up-insecure up-secure up-both test-up down test test-verbose clean logs-insecure logs-secure
+
+# Login rate limit used when running the suite. The production default is
+# 10/minute (docker-compose.secure.yml); the suite performs more than ten
+# logins a minute, so running it against the production threshold would make
+# every test after the first ten fail with 429 for reasons unrelated to what
+# they assert. test_rate_limiting reads this same value and overshoots it, so
+# the limiter is still verified — against whatever the app is running with.
+# See TESTING.md, "Rate limiting and the test suite".
+TEST_LOGIN_RATE_LIMIT ?= 20 per minute
 
 help:
 	@echo ""
@@ -27,6 +36,14 @@ up-secure:
 
 up-both: up-insecure up-secure
 
+# Same images, same code — only the rate-limit thresholds differ.
+test-up:
+	docker compose -f docker-compose.insecure.yml up -d --build
+	HMS_LOGIN_RATE_LIMIT="$(TEST_LOGIN_RATE_LIMIT)" \
+	  docker compose -f docker-compose.secure.yml up -d --build
+	@echo "Both apps up in TEST configuration (login limit: $(TEST_LOGIN_RATE_LIMIT))"
+	@echo "Now run: make test"
+
 down:
 	docker compose -f docker-compose.insecure.yml down
 	docker compose -f docker-compose.secure.yml down
@@ -35,11 +52,12 @@ test:
 	@echo "Installing test dependencies..."
 	pip install -q -r tests/requirements.txt
 	@echo "Running security regression suite..."
-	cd tests && pytest -v
+	cd tests && HMS_LOGIN_RATE_LIMIT="$(TEST_LOGIN_RATE_LIMIT)" pytest -v
 
 test-verbose:
 	pip install -q -r tests/requirements.txt
-	cd tests && pytest -v --tb=long 2>&1 | tee ../RESULTS_raw.txt
+	cd tests && HMS_LOGIN_RATE_LIMIT="$(TEST_LOGIN_RATE_LIMIT)" \
+	  pytest -v --tb=long 2>&1 | tee ../RESULTS_raw.txt
 	@echo "Output saved to RESULTS_raw.txt"
 
 logs-insecure:
@@ -57,7 +75,7 @@ shell-secure:
 # Demonstrate SQL injection in the insecure search endpoint
 demo-sqli:
 	@echo "Demonstrating SQL injection in insecure patient search..."
-	@echo "Payload: %' UNION SELECT id,username,password,role,NULL FROM users--"
+	@echo "Payload: %' UNION SELECT id,username,password,role,NULL,NULL FROM users--"
 	@echo "Log in at http://localhost:5000 as alice/alice123, then paste the payload into the search box."
 
 # Show security headers comparison
