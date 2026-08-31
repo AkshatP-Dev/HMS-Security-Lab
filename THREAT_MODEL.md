@@ -101,8 +101,10 @@ cookie); SameSite is absent (cookie sent on cross-site requests).
 login endpoint.  
 **Likelihood (insecure):** High — no rate limit or lockout.  
 **Impact:** High — account takeover.  
-**Mitigation (secure):** Flask-Limiter enforces 10 requests/minute per IP on
-`/login`.  Exceeding this returns 429; the counter resets after the window.
+**Mitigation (secure):** Flask-Limiter enforces 10 POSTs/minute per IP on
+`/login` (configurable via `HMS_LOGIN_RATE_LIMIT`; see TESTING.md).  Exceeding
+this returns 429; the counter resets after the window.  GET is not limited —
+rendering the form consumes no password guess.
 
 ### T-07 — Clickjacking
 **Description:** Attacker frames the HMS login page inside an invisible iframe
