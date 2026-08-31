@@ -86,7 +86,7 @@ md5pw = hashlib.md5(password.encode()).hexdigest()
 MD5 was designed for speed.  A modern GPU can compute ~10 billion MD5 hashes
 per second.  There is no salt, so identical passwords produce identical hashes
 — an attacker can use a precomputed rainbow table to crack every account in
-seconds.  The admin password `admin` → `21232f297a57a5a743894a0e4a801fc3` is
+seconds.  The admin password `admin123` → `0192023a7bbd73250516f069df18b500` is
 in every public hash database.
 
 **Secure fix:**
