@@ -21,6 +21,11 @@ services:
       - HMS_SECRET_KEY=CHANGE_ME_USE_openssl_rand_hex_32
       - FLASK_DEBUG=false
       - HTTPS=false              # Set true when running behind TLS terminator
+      # FIX-04: production thresholds. `make test-up` starts the same image
+      # with a raised login limit so the suite does not throttle itself —
+      # see TESTING.md, "Rate limiting and the test suite".
+      - HMS_LOGIN_RATE_LIMIT=${HMS_LOGIN_RATE_LIMIT:-10 per minute}
+      - HMS_DEFAULT_RATE_LIMITS=${HMS_DEFAULT_RATE_LIMITS:-5000 per day;500 per hour}
     restart: unless-stopped
 
 volumes:
